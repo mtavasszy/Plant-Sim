@@ -1,69 +1,56 @@
 from __future__ import annotations
 
+
+import numpy as np
+
+from plantsim.plant_sim import PlantSim
+
 import contextlib
+
 with contextlib.redirect_stdout(None):
     import pygame
     from pygame import DOUBLEBUF, HWSURFACE, Surface
 
-from pathlib import Path
-import cv2
-
-import numpy as np
 from pydantic import BaseModel, ConfigDict
-import pygame
-from plant import PlantCell
 from pydantic_numpy import np_array_pydantic_annotated_typing as ndarray
 
-from config import Config
+from plantsim.config import Config
+
 
 class App(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    grid: list[list[None | PlantCell]]
-    ground_matrix: ndarray(np.bool_) # boolean matrix indicating whether a cell is ground or not
-    background_surface: Surface
+    plant_sim: PlantSim
+    background_array: ndarray(np.uint8)
     display: Surface
-
 
     @classmethod
     def create(cls) -> App:
         """Initialize a plant simulation application"""
 
-        # create grid
-        grid = [[None for _ in range(Config.grid_size[1])] for _ in range(Config.grid_size[0])]
-        ground_matrix = App._load_ground_matrix(Config.ground_mask_path)
-        background_surface = App._get_background_surface(ground_matrix)
+        # create plantsim
+        plant_sim = PlantSim.create()
+        background_array = plant_sim.get_background_array()
 
-        # init pygame and create a display 
+        # init pygame and create a display
         pygame.init()
-        display = pygame.display.set_mode(size=Config.window_size, flags=HWSURFACE|DOUBLEBUF)
+        display = pygame.display.set_mode(
+            size=Config.window_size, flags=HWSURFACE | DOUBLEBUF
+        )
         pygame.display.set_caption(Config.app_title)
 
-        return App(grid=grid, ground_matrix=ground_matrix, display=display, background_surface=background_surface)
+        # create app
+        return App(
+            plant_sim=plant_sim, display=display, background_array=background_array
+        )
 
-    @staticmethod
-    def _load_ground_matrix(ground_mask_path: Path) -> np.ndarray:
-        """load a ground matrix from an image file"""
-
-        im = cv2.imread(str(ground_mask_path), cv2.IMREAD_GRAYSCALE)
-        ground_matrix = im[:,:] < 1 # black is ground
-        return ground_matrix
-
-    @staticmethod
-    def _get_background_surface(ground_matrix: np.ndarray) -> Surface:
-        """Return a PyGame Surface object to draw the air and ground"""
-
-        image_data = np.array([[(Config.ground_color if elem else Config.air_color) for elem in row] for row in ground_matrix.T])
-
-        surface = pygame.surfarray.make_surface(image_data)
-        scaled_surface = pygame.transform.scale(surface, Config.window_size)
-        return scaled_surface
-    
     def run(self):
         running = True
 
         while running:
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
+                if event.type == pygame.QUIT or (
+                    event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
+                ):
                     running = False
 
             self._update()
@@ -71,10 +58,16 @@ class App(BaseModel):
 
         pygame.quit()
 
-
     def _update(self):
-        pass
+        self.plant_sim.update()
 
     def _draw(self):
-        self.display.blit(self.background_surface, (0, 0))
+        # draw pixel data
+        image_data = self.background_array.copy()
+        image_data = self.plant_sim.draw(image_data)
+
+        # create and scale surface for big pixels
+        surface = pygame.surfarray.make_surface(image_data)
+        scaled_surface = pygame.transform.scale(surface, Config.window_size)
+        self.display.blit(scaled_surface, (0, 0))
         pygame.display.update()
