@@ -1,6 +1,7 @@
 from __future__ import annotations
+from dataclasses import dataclass
 
-
+import time
 import numpy as np
 
 from plantsim.plant_sim import PlantSim
@@ -17,7 +18,8 @@ from pydantic_numpy import np_array_pydantic_annotated_typing as ndarray
 from plantsim.config import Config
 
 
-class App(BaseModel):
+@dataclass(kw_only=True)
+class App:
     model_config = ConfigDict(arbitrary_types_allowed=True)
     plant_sim: PlantSim
     background_array: ndarray(np.uint8)
@@ -44,9 +46,14 @@ class App(BaseModel):
         )
 
     def run(self):
+        """Run the main loop of the app"""
+
         running = True
+        tick_time = 1 / Config.tick_rate # seconds per tick
 
         while running:
+            tick_start = time.perf_counter()
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or (
                     event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
@@ -56,12 +63,18 @@ class App(BaseModel):
             self._update()
             self._draw()
 
+            # wait for next tick
+            while time.perf_counter() - tick_start < tick_time:
+                time.sleep(0.001)
+
         pygame.quit()
 
     def _update(self):
+        """Update the app"""
         self.plant_sim.update()
 
     def _draw(self):
+        """Draw to the display"""
         # draw pixel data
         image_data = self.background_array.copy()
         image_data = self.plant_sim.draw(image_data)
