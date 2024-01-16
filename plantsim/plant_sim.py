@@ -13,7 +13,7 @@ with contextlib.redirect_stdout(None):
     from pygame import Surface
 from plantsim.config import Config
 
-from plantsim.plant import PlantCell, Seed
+from plantsim.plant_cell import PlantCell, Seed
 
 
 @dataclass(kw_only=True)
@@ -66,7 +66,7 @@ class PlantSim:
         """Draw a colored pixel in the image data for each plat cell"""
 
         for coord, plant_cell in self.plant_cells.items():
-            image_data[*coord, :] = Config.cell_type_colors[plant_cell.cell_type]
+            image_data[coord[0], coord[1], :] = Config.cell_type_colors[plant_cell.cell_type]
             
             # resource color visualisation
             # water_color = np.array([0, 162, 232])
@@ -80,8 +80,9 @@ class PlantSim:
     def apply_cell_updates(self, cell_updates: list[CellUpdate]):
         """Apply all the cell updates"""
 
-        for cell_update in cell_updates:
-            if cell_update.update_with is None:
-                del self.plant_cells[*cell_update.coords]
-            else:
-                self.plant_cells[cell_update.coords] = cell_update.update_with
+        if cell_updates:
+            for cell_update in cell_updates:
+                if cell_update.update_with is None:
+                    del self.plant_cells[cell_update.coords]
+                else:
+                    self.plant_cells[cell_update.coords] = cell_update.update_with
