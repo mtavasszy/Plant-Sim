@@ -23,11 +23,12 @@ class Config:
         CellType.STEM: (0, 100, 0),
         CellType.LEAF: (0, 255, 0),
         CellType.FLOWER: (255, 128, 255),  # TODO make hue variable from genome
+        CellType.DEADCELL: (80, 49, 33),
     }
 
     # SIMULATION
     initial_seed_coords = (int(grid_size[0] / 2), int(grid_size[1] / 4))
-    tick_rate = 20
+    tick_rate = 2000
     base_growth_p = 0.01
     flower_grow_rate = 0.1
     flower_growth_efficiency = 0.5
@@ -48,7 +49,7 @@ class Config:
     cell_resource_capacity = 10
 
     # PLANTS
-    cell_lifespan = 1000  # cell lifespan in ticks
+    cell_lifespan = 2000  # cell lifespan in ticks
 
     growable_types = {
         CellType.SEED: [CellType.STEM, CellType.ROOT],
@@ -56,6 +57,7 @@ class Config:
         CellType.STEM: [CellType.STEM, CellType.LEAF, CellType.FLOWER],
         CellType.LEAF: [],
         CellType.FLOWER: [],
+        CellType.DEADCELL: [],
     }
 
     # MISC

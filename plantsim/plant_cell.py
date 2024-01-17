@@ -19,7 +19,7 @@ class PlantCell(ABC):
     """Abstract base class for different cell types"""
 
     cell_type: ClassVar[CellType]
-    is_alive: bool = True
+    is_alive = True
     genome: Genome
     coords: tuple[int, int]
     parent: PlantCell
@@ -27,7 +27,7 @@ class PlantCell(ABC):
     age: int = 0  # age in ticks
     water: float = 0.0
     energy: float = 0.0
-    
+
     creation_cost_water: float = Config.default_creation_cost
     creation_cost_energy: float = Config.default_creation_cost
     constant_loss_water: float = Config.default_loss_per_tick
@@ -45,19 +45,20 @@ class PlantCell(ABC):
             energy=self.energy,
         )
 
-    def update(
-        self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray
-    ) -> list[CellUpdate]:
-        """
-        Update the state of the plant cell.
-        - Test for expression of genomes (growth)
-        - exchange water and suger with parent cells
-        """
-        self.age += 1
+    def update(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
+        """Update the state of the plant cell."""
 
-        self._collect_resources(all_coords=all_coords, ground_matrix=ground_matrix)
-        self._share_resources_with_parent()
-        return self._sample_growth(all_coords, ground_matrix)
+        self.age += 1
+        if not self.parent.is_alive and self.is_alive:
+            self.age = self.parent.age
+            self.is_alive = False
+
+        if not self.is_alive:
+            if self.age >= Config.dead_cell_lifespan:
+                return [CellUpdate(coords=self.coords, update_with=None)]
+
+        if self.is_alive:
+            self._share_resources_with_parent()
 
     def _sample_growth(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
         """Determine whether a new cell will be created and in which direction"""
@@ -74,21 +75,27 @@ class PlantCell(ABC):
 
             if self.energy >= cell_class.creation_cost_energy and self.water >= cell_class.creation_cost_water:
                 if any(directional_expressions):
-                    for directional_expression, coord_offset in zip(directional_expressions, Config.coords_for_directions):
+                    for directional_expression, coord_offset in zip(
+                        directional_expressions, Config.coords_for_directions
+                    ):
                         if directional_expression:
                             new_coords = (self.coords[0] + coord_offset[0], self.coords[1] + coord_offset[1])
                             if not new_coords in all_coords:
-                                if (cell_type is CellType.ROOT and ground_matrix[new_coords[0], new_coords[1]]) or (not cell_type is CellType.ROOT and not ground_matrix[new_coords[0], new_coords[1]]):
+                                if (cell_type is CellType.ROOT and ground_matrix[new_coords[0], new_coords[1]]) or (
+                                    not cell_type is CellType.ROOT and not ground_matrix[new_coords[0], new_coords[1]]
+                                ):
                                     self.energy -= cell_class.creation_cost_energy
                                     self.water -= cell_class.creation_cost_water
-                                    
-                                    new_plant_cell = cell_class(genome=self.genome, coords=new_coords, parent=self, cell_distance=self.cell_distance+1)
+
+                                    new_plant_cell = cell_class(
+                                        genome=self.genome,
+                                        coords=new_coords,
+                                        parent=self,
+                                        cell_distance=self.cell_distance + 1,
+                                    )
                                     # TODO keep track of branching properly
                                     cell_updates.append(CellUpdate(coords=new_coords, update_with=new_plant_cell))
         return cell_updates
-
-    def _collect_resources(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray):
-        pass
 
     def _share_resources_with_parent(self):
         """Share water and energy with parent plant cells"""
@@ -121,9 +128,21 @@ class PlantCell(ABC):
     #     self.water -= self.constant_loss_water
     #     self.energy -= self.constant_loss_energy
 
+
 @dataclass(kw_only=True)
 class Stem(PlantCell):
     cell_type = CellType.STEM
+
+    def update(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
+        """Update the state of the plant cell."""
+
+        potential_result = super().update(all_coords, ground_matrix)
+        if potential_result:
+            return potential_result
+
+        if self.is_alive:
+            self._collect_resources(all_coords, ground_matrix)
+            return self._sample_growth(all_coords, ground_matrix)
 
     def _collect_resources(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray):
         """Get the amount of energy the leaf cell generates per tick"""
@@ -132,10 +151,20 @@ class Stem(PlantCell):
         self.energy += Config.stem_energy_gain * surrounding_air_factor
 
 
-
 @dataclass(kw_only=True)
 class Root(PlantCell):
     cell_type = CellType.ROOT
+
+    def update(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
+        """Update the state of the plant cell."""
+
+        potential_result = super().update(all_coords, ground_matrix)
+        if potential_result:
+            return potential_result
+
+        if self.is_alive:
+            self._collect_resources(all_coords, ground_matrix)
+            return self._sample_growth(all_coords, ground_matrix)
 
     def _collect_resources(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray):
         """Get the amount of water the root cell generates per tick"""
@@ -144,16 +173,26 @@ class Root(PlantCell):
         self.water += Config.root_water_gain * surrounding_soil_factor
 
 
-
 @dataclass(kw_only=True)
 class Leaf(PlantCell):
     cell_type = CellType.LEAF
+
+    def update(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
+        """Update the state of the plant cell."""
+
+        potential_result = super().update(all_coords, ground_matrix)
+        if potential_result:
+            return potential_result
+
+        if self.is_alive:
+            self._collect_resources(all_coords, ground_matrix)
 
     def _collect_resources(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray):
         """Get the amount of energy the leaf cell generates per tick"""
 
         surrounding_air_factor = self._get_surrounding_air_factor(all_coords, ground_matrix)
         self.energy += Config.leaf_energy_gain * surrounding_air_factor
+
 
 @dataclass(kw_only=True)
 class Flower(PlantCell):
@@ -162,15 +201,16 @@ class Flower(PlantCell):
     seed_progress_water = 0.0
     seed_progress_energy = 0.0
 
-    def update(
-        self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray
-    ) -> list[CellUpdate]:
+    def update(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
         """Grow the flower into a seed"""
 
-        self.age += 1
+        potential_result = super().update(all_coords, ground_matrix)
+        if potential_result:
+            return potential_result
 
-        self._share_resources_with_parent()
+        return self._grow_seed()
 
+    def _grow_seed(self) -> list[CellUpdate]:
         if self.water > Config.flower_grow_rate and self.seed_progress_water < Config.seed_creation_cost:
             self.water -= Config.flower_grow_rate
             self.seed_progress_water += Config.flower_grow_rate * Config.flower_growth_efficiency
@@ -178,14 +218,17 @@ class Flower(PlantCell):
             self.energy -= Config.flower_grow_rate
             self.seed_progress_energy += Config.flower_grow_rate * Config.flower_growth_efficiency
 
-        if self.seed_progress_energy >= Config.seed_creation_cost and self.seed_progress_water >= Config.seed_creation_cost:
+        if (
+            self.seed_progress_energy >= Config.seed_creation_cost
+            and self.seed_progress_water >= Config.seed_creation_cost
+        ):
             copy_coords = copy.copy(self.coords)
             new_seed = Seed(genome=self.genome.mutate(), coords=copy_coords)
             return [
                 CellUpdate(coords=self.coords, update_with=None),
                 CellUpdate(coords=copy_coords, update_with=new_seed),
             ]
-        
+
 
 @dataclass(kw_only=True)
 class Seed(PlantCell):
@@ -208,26 +251,31 @@ class Seed(PlantCell):
         genome = Genome.init_random()
         return Seed(genome=genome, coords=coords)
 
-    def update(
-        self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray
-    ) -> list[CellUpdate]:
-        """
-        Update the state of the plant cell.
-        - Test for expression of genomes (growth)
-        - exchange water and suger with parent cells
-        - special case for seed: if in the air, fall down
-        """
-
-        self.age += 1
+    def update(self, all_coords: set[tuple[int, int]], ground_matrix: np.ndarray) -> list[CellUpdate]:
+        """Update the state of the plant cell"""
 
         # if in air, drop to the ground. Else, grow.
         if not ground_matrix[self.coords[0], self.coords[1]]:
-            self_moved = self.copy()
-            self_moved.coords = (self.coords[0], self.coords[1] + 1)
-
-            return [
-                CellUpdate(coords=self.coords, update_with=None),
-                CellUpdate(coords=self_moved.coords, update_with=self_moved),
-            ]
+            return self._fall_down()
         else:
-            return self._sample_growth(all_coords, ground_matrix)
+            self.age += 1
+            if self.is_alive and self.age >= Config.cell_lifespan:
+                self.age = 0
+                self.is_alive = False
+
+            if not self.is_alive:
+                if self.age >= Config.dead_cell_lifespan:
+                    return [CellUpdate(coords=self.coords, update_with=None)]
+
+            if self.is_alive:
+                return self._sample_growth(all_coords, ground_matrix)
+
+
+    def _fall_down(self) -> list[CellUpdate]:
+        self_moved = self.copy()
+        self_moved.coords = (self.coords[0], self.coords[1] + 1)
+
+        return [
+            CellUpdate(coords=self.coords, update_with=None),
+            CellUpdate(coords=self_moved.coords, update_with=self_moved),
+        ]

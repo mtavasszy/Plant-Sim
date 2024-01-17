@@ -66,7 +66,7 @@ class PlantSim:
         """Draw a colored pixel in the image data for each plat cell"""
 
         for coord, plant_cell in self.plant_cells.items():
-            image_data[coord[0], coord[1], :] = Config.cell_type_colors[plant_cell.cell_type]
+            image_data[coord[0], coord[1], :] = Config.cell_type_colors[plant_cell.cell_type] if plant_cell.is_alive else Config.dead_cell_color
             
             # resource color visualisation
             # water_color = np.array([0, 162, 232])

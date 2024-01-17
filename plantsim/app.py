@@ -20,6 +20,7 @@ from plantsim.config import Config
 
 @dataclass(kw_only=True)
 class App:
+    tick_count = 0
     model_config = ConfigDict(arbitrary_types_allowed=True)
     plant_sim: PlantSim
     background_array: ndarray(np.uint8)
@@ -38,7 +39,7 @@ class App:
         display = pygame.display.set_mode(
             size=Config.window_size, flags=HWSURFACE | DOUBLEBUF
         )
-        pygame.display.set_caption(Config.app_title)
+        pygame.display.set_caption(f"{Config.app_title}")
 
         # create app
         return App(
@@ -62,6 +63,9 @@ class App:
 
             self._update()
             self._draw()
+
+            self.tick_count += 1
+            pygame.display.set_caption(f"{Config.app_title} ({self.tick_count})")
 
             # wait for next tick
             while time.perf_counter() - tick_start < tick_time:

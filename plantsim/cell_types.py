@@ -6,3 +6,4 @@ class CellType(Enum):
     STEM = "STEM"
     LEAF = "LEAF"
     FLOWER = "FLOWER"
+    DEADCELL = "DEADCELL"
